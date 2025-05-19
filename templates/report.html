@@ -1,0 +1,52 @@
+{% load static %}
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Competitive Intelligence Report – {{ report.brand.name }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.4/dist/tailwind.min.css" rel="stylesheet" />
+  <style> @page { margin: 32px; } </style>
+</head>
+<body class="font-sans bg-white text-slate-900">
+  <header class="mb-8">
+    <h1 class="text-3xl font-bold">Market Position Report</h1>
+    <p class="text-sm text-slate-500">Generated {{ report.generated_at|date:"Y‑m‑d H:i" }}</p>
+  </header>
+
+  <!-- KPI table -->
+  <section class="mb-10">
+    <h2 class="text-xl font-semibold mb-4">Key Performance Indicators</h2>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-100">
+          <tr>
+            <th class="px-3 py-2 text-left font-semibold">KPI</th>
+            {% for col in kpi_frame.columns %}
+              <th class="px-3 py-2 text-left font-semibold">{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for row in kpi_frame.itertuples %}
+            <tr>
+              <td class="px-3 py-2 whitespace-nowrap font-medium">{{ row.Index }}</td>
+              {% for val in row[1:] %}
+                <td class="px-3 py-2 whitespace-nowrap">{{ val }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- DeepSeek insight -->
+  {% if report.ai_insight %}
+  <section class="prose max-w-none">
+    <h2 class="text-xl font-semibold mb-2">AI‑Generated Recommendations</h2>
+    {{ report.ai_insight|safe }}
+  </section>
+  {% endif %}
+</body>
+</html>

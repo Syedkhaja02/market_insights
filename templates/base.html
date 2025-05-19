@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Market Insights{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.2/dist/tailwind.min.css" rel="stylesheet"/>
+</head>
+<body class="min-h-screen bg-gray-50">
+  <nav class="py-4 bg-white shadow">
+    <div class="container mx-auto flex justify-between">
+      <a class="font-bold" href="/">Market Insights</a>
+      {% if user.is_authenticated %}
+        <span>Hello {{ user.username }}</span>
+        <a href="/accounts/logout/" class="text-indigo-600">Log out</a>
+      {% endif %}
+    </div>
+  </nav>
+  <main class="container mx-auto py-8">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

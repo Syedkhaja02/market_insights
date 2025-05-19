@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Delete My Data{% endblock %}
+{% block content %}
+<h1>Request Data Deletion</h1>
+<p>To have all of your data removed from our system, please click the button below:</p>
+<form action="" method="post">
+  {% csrf_token %}
+  <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded">
+    Delete My Account & Data
+  </button>
+</form>
+<p>Or email us at <a href="mailto:support@yourdomain.com">support@yourdomain.com</a>.</p>
+{% endblock %}

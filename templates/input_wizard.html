@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Create Competitive‑Intel Report{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-semibold mb-6">Step 3: Add competitors & generate report</h1>
+
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <fieldset class="border p-4 rounded-xl shadow-sm">
+      <legend class="font-medium">Your brand</legend>
+      {{ form.your_site.label_tag }}
+      {{ form.your_site }}
+      {{ form.your_site.errors }}
+    </fieldset>
+
+    <fieldset class="border p-4 rounded-xl shadow-sm">
+      <legend class="font-medium">Competitor 1 (required)</legend>
+      {{ form.competitor1_site.label_tag }} {{ form.competitor1_site }} {{ form.competitor1_site.errors }}<br>
+      {{ form.competitor1_fb.label_tag }} {{ form.competitor1_fb }} {{ form.competitor1_fb.errors }}<br>
+      {{ form.competitor1_ig.label_tag }} {{ form.competitor1_ig }} {{ form.competitor1_ig.errors }}
+    </fieldset>
+
+    <fieldset class="border p-4 rounded-xl shadow-sm">
+      <legend class="font-medium">Competitor 2 (optional)</legend>
+      {{ form.competitor2_site.label_tag }} {{ form.competitor2_site }} {{ form.competitor2_site.errors }}<br>
+      {{ form.competitor2_fb.label_tag }} {{ form.competitor2_fb }} {{ form.competitor2_fb.errors }}<br>
+      {{ form.competitor2_ig.label_tag }} {{ form.competitor2_ig }} {{ form.competitor2_ig.errors }}
+    </fieldset>
+
+    <button type="submit" class="mt-4 px-6 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Generate report</button>
+  </form>
+</div>
+{% endblock %}

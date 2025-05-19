@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-6">KPI Dashboard</h1>
+<table class="w-full text-sm">
+  <thead class="bg-gray-100">
+    <tr>
+      <th class="p-2 text-left">Brand</th>
+      <th class="p-2 text-left">Metric</th>
+      <th class="p-2 text-left">Value</th>
+      <th class="p-2 text-left">WoW Δ</th>
+      <th class="p-2 text-left">Report</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+      {% for cell in row.cells %}
+      <tr class="border-b last:border-none">
+        {% if forloop.first %}
+        <td class="p-2 font-medium" rowspan="{{ row.cells|length }}">{{ row.brand }}</td>
+        {% endif %}
+        <td class="p-2">{{ cell.label }}</td>
+        <td class="p-2">{{ cell.value|floatformat:1 }}</td>
+        <td class="p-2">{{ cell.arrow }} {{ cell.pct }}%</td>
+        {% if forloop.first %}
+        <td class="p-2" rowspan="{{ row.cells|length }}">
+          <a href="{{ row.report.get_absolute_url }}" class="text-indigo-600">View</a>
+          &nbsp;|&nbsp;
+          <a href="{{ row.report.pdf_url }}" class="text-indigo-600">PDF</a>
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

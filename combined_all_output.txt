@@ -1,0 +1,2629 @@
+
+
+# ===== FILE: C:\Syed\market_insights\.env =====
+
+DJANGO_SECRET_KEY=-msu=d5uq5#fz*a1hfd%qz&hnck9to%zrk)-n=*r#e2d=pr_p7
+DJANGO_DEBUG=True
+DATABASE_URL=postgres://postgres:1@localhost:5432/market_insights
+REDIS_URL=redis://redis:6379/0
+
+MOZ_API_KEY=bW96c2NhcGUtcHgxZHlUZ2tWMzp3bFp5dFdpd2tEZTB5ZVREdTVPY09wdVpYSnp4cnJxMw==
+SERPSTACK_API_KEY=ccdb8e89ae729ca1531c9a2e1a7e621c
+DATAFORSEO_API_KEY="YOUR_DATAFORSEO_KEY"
+TWITTER_BEARER=AAAAAAAAAAAAAAAAAAAAABJZ1QEAAAAA2%2FQGk%2BfkvMzN9vR%2BNe6cPerMxDY%3DxGvxKOIEmhO4FDBCdTs3hxfZrvPTUB2aqiJ53GVyjTWkRJhc0s
+MENTION_API_KEY="YOUR_MENTION_API_KEY"
+SOCIALBLADE_API_KEY="YOUR_SOCIALBLADE_KEY"
+
+# Google‑Service‑Account JSON path or base64 (GA4 / GBP)
+GOOGLE_CREDENTIALS="C:\Users\Younoh Media\Downloads\client_secret_394411091558-sm607t1kut0kiv21et1hrv6r3vh7gvgu.apps.googleusercontent.com.json"
+# Google OAuth (for your GA4‐only flow)
+GOOGLE_CLIENT_ID=394411091558-sm607t1kut0kiv21et1hrv6r3vh7gvgu.apps.googleusercontent.com 
+GOOGLE_CLIENT_SECRET=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
+
+# Meta App credentials
+META_APP_ID=1782096942348795
+META_APP_SECRET=4e19bb36e11db1653290146095e3cf68
+
+SHOPIFY_API_KEY=a69570ee1def05def1aa3f8d2e014509
+SHOPIFY_API_SECRET=bd9df9a23fdc0df1b4824edcd211339b 
+
+# ===== FILE: C:\Syed\market_insights\combined_all_output.txt =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\docker-compose.yml =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\manage.py =====
+
+#!/usr/bin/env python
+"""Django’s command-line utility for administrative tasks."""
+
+import os
+import sys
+from pathlib import Path
+
+import environ  # pip install django-environ
+
+
+def main() -> None:
+    """Run administrative tasks."""
+    #
+    # 1. Load variables from .env if the file exists
+    #
+    env = environ.Env()
+    env_path = Path(__file__).resolve().parent / ".env"
+    if env_path.exists():
+        environ.Env.read_env(env_path)
+
+    #
+    # 2. Point Django at the settings module
+    #
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "market_insights.settings")
+
+    #
+    # 3. Hand off to Django’s CLI wrapper
+    #
+    try:
+        from django.core.management import execute_from_command_line
+    except ImportError as exc:
+        raise ImportError(
+            "Couldn't import Django. Make sure it's installed and that you "
+            "have activated the correct virtual environment."
+        ) from exc
+
+    execute_from_command_line(sys.argv)
+
+
+if __name__ == "__main__":
+    main()
+
+
+# ===== FILE: C:\Syed\market_insights\requirements.txt =====
+
+django==5.0.*
+django-allauth~=0.60
+psycopg[binary]~=3.1
+python-environ==0.4.54
+celery~=5.3
+redis~=5.0
+requests~=2.32
+weasyprint~=60.2
+cryptography~=42.0
+python-dotenv~=1.0
+
+# ===== FILE: C:\Syed\market_insights\core\admin.py =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\core\forms.py =====
+
+from django import forms
+
+class InputForm(forms.Form):
+    your_site        = forms.URLField(label="Your Website URL")
+    competitor_site1 = forms.URLField(label="Competitor A Website URL")
+    competitor_site2 = forms.URLField(label="Competitor B Website URL", required=False)
+    competitor_fb1   = forms.CharField(label="Competitor A Facebook Page", required=False)
+    competitor_fb2   = forms.CharField(label="Competitor B Facebook Page", required=False)
+    competitor_ig1   = forms.CharField(label="Competitor A Instagram", required=False)
+    competitor_ig2   = forms.CharField(label="Competitor B Instagram", required=False)
+
+# ===== FILE: C:\Syed\market_insights\core\models.py =====
+
+from django.db import models
+from django.contrib.auth import get_user_model
+from cryptography.fernet import Fernet
+from django.conf import settings
+
+User = get_user_model()
+
+class Brand(models.Model):
+    user      = models.ForeignKey(User, on_delete=models.CASCADE)
+    name      = models.CharField(max_length=100)
+    website   = models.URLField()
+    instagram = models.CharField(max_length=100, blank=True)
+    facebook  = models.CharField(max_length=100, blank=True)
+    twitter   = models.CharField(max_length=100, blank=True)
+
+    # encrypted OAuth refresh tokens (JSON blobs)
+    meta_token   = models.BinaryField(null=True, blank=True)
+    google_token = models.BinaryField(null=True, blank=True)
+    shopify_token = models.BinaryField(null=True, blank=True)
+
+    def _encrypt(self, raw: str) -> bytes:
+        key = settings.SECRET_KEY[:32].encode()
+        return Fernet(key).encrypt(raw.encode())
+
+    def _decrypt(self, blob: bytes) -> str:
+        key = settings.SECRET_KEY[:32].encode()
+        return Fernet(key).decrypt(blob).decode()
+
+class MetricSnapshot(models.Model):
+    brand        = models.ForeignKey(Brand, on_delete=models.CASCADE)
+    metric_name  = models.CharField(max_length=120)
+    value        = models.CharField(max_length=120)
+    captured_at  = models.DateTimeField(auto_now_add=True)
+
+class Report(models.Model):
+    brand         = models.ForeignKey(Brand, on_delete=models.CASCADE)
+    html          = models.TextField()
+    pdf           = models.FileField(upload_to='reports/')
+    generated_at  = models.DateTimeField(auto_now_add=True)
+
+# ===== FILE: C:\Syed\market_insights\core\schedule.py =====
+
+"""Central place to register Celery beat entries."""
+from __future__ import annotations
+from datetime import timedelta
+from celery.schedules import crontab
+
+def register(celery_app):
+    # Run every Monday at 03:00 UTC
+    celery_app.conf.beat_schedule.update({
+        "weekly_metric_refresh": {
+            "task": "core.tasks.refresh_all_reports",
+            "schedule": crontab(hour=3, minute=0, day_of_week="mon"),
+        },
+    })
+
+# ===== FILE: C:\Syed\market_insights\core\tasks.py =====
+
+from __future__ import annotations
+import logging
+from typing import Any, Dict, List
+from datetime import timedelta
+
+from celery import shared_task, chain, group
+from django.utils import timezone
+from django.db import transaction
+
+from core.models.oauth import Brand
+from core.models.metrics import MetricSnapshot
+from core.models.report import Report, Competitor
+from utils.api_clients import (
+    MozClient,
+    SerpstackClient,
+    DataForSEOClient,
+    TwitterClient,
+    MentionClient,
+    SocialBladeClient,
+    GA4Client,
+    MetaInsightsClient,
+    GBPClient,
+    ShopifyClient,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _store_snapshot(
+    *,
+    report: Report | None,
+    brand: Brand,
+    metric: str,
+    value: float | None,
+    raw: Dict[str, Any] | None = None,
+) -> None:
+    """
+    Helper to create a MetricSnapshot for a given report & brand.
+    """
+    MetricSnapshot.objects.create(
+        report=report,
+        brand=brand,
+        metric_name=metric,
+        value=value,
+        raw_json=raw or {},
+        fetched_at=timezone.now(),
+    )
+
+
+@shared_task(name="fetch_public_metrics")
+def fetch_public_metrics(report_id: str, brand_id: str) -> None:
+    """
+    Pull public metrics (SEO, social counts, traffic estimates, mentions) for a brand.
+    """
+    report = Report.objects.filter(id=report_id).first()
+    brand = Brand.objects.get(id=brand_id)
+
+    moz = MozClient()
+    serp = SerpstackClient()
+    dfs = DataForSEOClient()
+    tw = TwitterClient()
+    men = MentionClient()
+    sb = SocialBladeClient()
+
+    # 1) Domain Authority & Backlinks (Moz)
+    da = moz.domain_authority(brand.website)
+    _store_snapshot(report=report, brand=brand, metric="domain_authority", value=da, raw=None)
+    bl = moz.backlinks(brand.website)
+    _store_snapshot(report=report, brand=brand, metric="backlinks", value=bl, raw=None)
+
+    # 2) SERP features (featured snippet & local pack)
+    serp_data = serp.serp_features(brand.name or brand.website)
+    _store_snapshot(report=report, brand=brand, metric="serp_featured_snippet", value=int(serp_data["featured_snippet"]), raw=serp_data)
+    _store_snapshot(report=report, brand=brand, metric="serp_local_pack", value=int(serp_data["local_pack"]), raw=serp_data)
+
+    # 3) Traffic Estimates (DataForSEO)
+    traffic = dfs.traffic_estimate(brand.website)
+    _store_snapshot(report=report, brand=brand, metric="est_organic_visits", value=traffic.get("organic"), raw=traffic)
+    _store_snapshot(report=report, brand=brand, metric="est_paid_visits", value=traffic.get("paid"), raw=traffic)
+
+    # 4) Twitter followers
+    if brand.twitter:
+        tw_data = tw.public_metrics(brand.twitter)
+        _store_snapshot(report=report, brand=brand, metric="twitter_followers", value=tw_data.get("followers_count"), raw=tw_data)
+
+    # 5) SocialBlade Instagram & Facebook
+    if brand.instagram:
+        ig_data = sb.instagram_stats(brand.instagram)
+        _store_snapshot(report=report, brand=brand, metric="instagram_followers", value=ig_data.get("followers"), raw=ig_data)
+        _store_snapshot(report=report, brand=brand, metric="instagram_growth_30d", value=ig_data.get("growth_30d"), raw=ig_data)
+    if brand.facebook_page:
+        fb_data = sb.facebook_stats(brand.facebook_page)
+        _store_snapshot(report=report, brand=brand, metric="facebook_followers", value=fb_data.get("followers"), raw=fb_data)
+
+    # 6) Mention.com sentiment & volume
+    if getattr(brand, "mention_account_id", None) and getattr(brand, "mention_alert_id", None):
+        men_data = men.brand_mentions(brand.mention_account_id, brand.mention_alert_id)
+        _store_snapshot(report=report, brand=brand, metric="mentions_volume", value=men_data["volume"], raw=men_data)
+        _store_snapshot(report=report, brand=brand, metric="mentions_sentiment", value=men_data["sentiment_pct"], raw=men_data)
+
+
+@shared_task(name="fetch_private_metrics")
+def fetch_private_metrics(report_id: str, brand_id: str) -> None:
+    """
+    Pull private metrics (GA4, IG reach, GBP reviews, Shopify) for a brand.
+    """
+    report = Report.objects.filter(id=report_id).first()
+    brand = Brand.objects.get(id=brand_id)
+
+    # GA4 analytics
+    ga4 = GA4Client(brand)
+    ga4_data = ga4.summary()
+    for key, val in ga4_data.items():
+        _store_snapshot(report=report, brand=brand, metric=f"ga4_{key}", value=val, raw=ga4_data)
+
+    # Instagram Business insights
+    if getattr(brand, "instagram_business_id", None):
+        meta = MetaInsightsClient(brand)
+        ig_ins = meta.instagram_insights()
+        _store_snapshot(report=report, brand=brand, metric="ig_reach", value=ig_ins.get("reach"), raw=ig_ins)
+
+    # Google Business Profile reviews
+    if getattr(brand, "gbp_location_id", None):
+        gbp = GBPClient(brand)
+        gbp_data = gbp.reviews()
+        _store_snapshot(report=report, brand=brand, metric="gbp_avg_rating", value=gbp_data.get("rating"), raw=gbp_data)
+        _store_snapshot(report=report, brand=brand, metric="gbp_review_count", value=gbp_data.get("count"), raw=gbp_data)
+
+    # Shopify sales
+    if getattr(brand, "shopify_shop", None):
+        shop = ShopifyClient(brand)
+        shop_data = shop.sales_summary()
+        _store_snapshot(report=report, brand=brand, metric="shopify_rev", value=shop_data.get("revenue"), raw=shop_data)
+        _store_snapshot(report=report, brand=brand, metric="shopify_aov", value=shop_data.get("aov"), raw=shop_data)
+
+
+@shared_task(name="start_report_generation")
+def start_report_generation(report_id: str) -> str:
+    """
+    Orchestrates the end-to-end workflow: public metrics → private metrics → PDF → AI insight.
+    """
+    report = Report.objects.get(id=report_id)
+    brand = report.owner
+
+    # Build public jobs for brand + competitors
+    public_jobs: List = [fetch_public_metrics.s(report_id, brand.id)]
+    for comp in report.competitors.all():
+        public_jobs.append(fetch_public_metrics.s(report_id, comp.brand.id))
+
+    workflow = chain(
+        group(public_jobs),
+        fetch_private_metrics.s(report_id, brand.id),
+        # finalise_report and generate_ai_insight are imported lazily below
+        finalise_report.s(report_id),
+        generate_ai_insight.s(report_id),
+    )
+    workflow.apply_async()
+
+    report.status = Report.Status.COLLECTING
+    report.save(update_fields=["status"])
+    return report.id
+
+
+# Avoid circular import; import at module end
+from core.tasks import finalise_report, generate_ai_insight  # noqa: E402
+
+
+# ===== FILE: C:\Syed\market_insights\core\urls.py =====
+
+# core/urls.py
+
+from django.urls import path, include
+from django.views.generic import TemplateView
+
+from core.views.input import InputFormView, InputWizardView
+from core.views.report import ReportDetailView
+from core.views.dashboard import DashboardView, DashboardRedirectView
+from core.views.oauth import (
+    MetaOAuthStartView, MetaOAuthCallbackView,
+    GA4OAuthStartView, GA4OAuthCallbackView,
+    ShopifyOAuthStartView, ShopifyOAuthCallbackView,
+)
+from core.views.privacy_and_deletion import (
+    PrivacyPolicyView,
+    FacebookDataDeletionInstructionsView,
+    FacebookDataDeletionCallbackView,
+    FacebookDataDeletionCompleteView,
+)
+
+urlpatterns = [
+    # step flow
+    path("", DashboardRedirectView.as_view(), name="home"),
+    path("connect/", TemplateView.as_view(template_name="connect_data.html"), name="connect_data"),
+    path("input/", InputFormView.as_view(), name="input_form"),
+    path("wizard/", InputWizardView.as_view(), name="input_wizard"),
+    path("report/queued/", TemplateView.as_view(template_name="report_queued.html"), name="report_queued"),
+    path("reports/<uuid:pk>/", ReportDetailView.as_view(), name="report_detail"),
+    path("dashboard/", DashboardView.as_view(), name="dashboard"),
+
+    # OAuth
+    path("oauth/meta/start/", MetaOAuthStartView.as_view(), name="oauth-meta-start"),
+    path("oauth/callback/meta/", MetaOAuthCallbackView.as_view(), name="oauth-meta-callback"),
+    path("oauth/ga4/start/", GA4OAuthStartView.as_view(), name="oauth-ga4-start"),
+    path("oauth/callback/ga4/", GA4OAuthCallbackView.as_view(), name="oauth-ga4-callback"),
+    path("oauth/shopify/start/", ShopifyOAuthStartView.as_view(), name="oauth-shopify-start"),
+    path("oauth/callback/shopify/", ShopifyOAuthCallbackView.as_view(), name="oauth-shopify-callback"),
+
+    # Privacy & Data Deletion
+    path("privacy/", PrivacyPolicyView.as_view(), name="privacy_policy"),
+    path("facebook/data-deletion/", FacebookDataDeletionInstructionsView.as_view(), name="facebook_data_deletion"),
+    path("facebook/data-deletion-callback/", FacebookDataDeletionCallbackView.as_view(), name="facebook_data_deletion_callback"),
+    path("facebook/data-deletion-complete/", FacebookDataDeletionCompleteView.as_view(), name="facebook_data_deletion_complete"),
+]
+
+
+# ===== FILE: C:\Syed\market_insights\core\views.py =====
+
+from django.views.generic import TemplateView, FormView, RedirectView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.urls import reverse_lazy
+from .forms import InputForm
+
+class DashboardRedirectView(RedirectView):
+    pattern_name = 'connect_data'
+
+class ConnectDataView(LoginRequiredMixin, TemplateView):
+    template_name = 'connect_data.html'
+
+    # real OAuth URLs for Meta/Google will redirect back here with ?code=...
+    # Stub logic – in next sprint we exchange the code for tokens
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+class InputFormView(LoginRequiredMixin, FormView):
+    template_name = 'input_form.html'
+    form_class    = InputForm
+    success_url   = reverse_lazy('home')  # will redirect to report once implemented
+
+    def form_valid(self, form):
+        # TODO: trigger Celery tasks to fetch metrics & create report
+        # tasks.generate_report.delay(self.request.user.id, form.cleaned_data)
+        return super().form_valid(form)
+
+# ===== FILE: C:\Syed\market_insights\core\__init__.py =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\core\forms\input.py =====
+
+"""Form / validation layer for the Step‑3 wizard."""
+from __future__ import annotations
+
+from django import forms
+from django.core.exceptions import ValidationError
+
+from core.models.report import Report, Competitor
+
+
+class InputWizardForm(forms.Form):
+    your_site = forms.URLField(label="Your website URL", required=True)
+
+    # Competitor 1 (required)
+    competitor1_site = forms.URLField(label="Competitor 1 website", required=True)
+    competitor1_fb = forms.URLField(label="Competitor 1 Facebook", required=False)
+    competitor1_ig = forms.URLField(label="Competitor 1 Instagram", required=False)
+
+    # Competitor 2 (optional)
+    competitor2_site = forms.URLField(label="Competitor 2 website", required=False)
+    competitor2_fb = forms.URLField(label="Competitor 2 Facebook", required=False)
+    competitor2_ig = forms.URLField(label="Competitor 2 Instagram", required=False)
+
+    def clean(self):
+        cleaned = super().clean()
+        # if social links are supplied for competitor 2, ensure site is provided
+        if (cleaned.get("competitor2_fb") or cleaned.get("competitor2_ig")) and not cleaned.get("competitor2_site"):
+            raise ValidationError("Provide competitor 2 website if you add its social links.")
+        return cleaned
+
+    # ————————————————————————————————————————————
+    # Persistence helper
+    # ————————————————————————————————————————————
+    def save(self, brand):
+        """Create Report + Competitor rows and return the Report instance."""
+        report = Report.objects.create(owner=brand, your_site=self.cleaned_data["your_site"])
+
+        # Competitor 1
+        Competitor.objects.create(
+            report=report,
+            name="Competitor 1",
+            website=self.cleaned_data["competitor1_site"],
+            facebook_url=self.cleaned_data.get("competitor1_fb", ""),
+            instagram_url=self.cleaned_data.get("competitor1_ig", ""),
+        )
+
+        # Competitor 2 (optional)
+        if self.cleaned_data.get("competitor2_site"):
+            Competitor.objects.create(
+                report=report,
+                name="Competitor 2",
+                website=self.cleaned_data["competitor2_site"],
+                facebook_url=self.cleaned_data.get("competitor2_fb", ""),
+                instagram_url=self.cleaned_data.get("competitor2_ig", ""),
+            )
+
+        return report
+
+# ===== FILE: C:\Syed\market_insights\core\forms\input_form.py =====
+
+# core/forms/input_form.py
+from __future__ import annotations
+from django import forms
+from django.core.exceptions import ValidationError
+from core.models.report import Report, Competitor
+
+class InputWizardForm(forms.Form):
+    your_site = forms.URLField(label="Your website URL", required=True)
+
+    competitor1_site = forms.URLField(label="Competitor 1 Website", required=True)
+    competitor1_fb = forms.URLField(label="Competitor 1 Facebook", required=False)
+    competitor1_ig = forms.URLField(label="Competitor 1 Instagram", required=False)
+
+    competitor2_site = forms.URLField(label="Competitor 2 Website", required=False)
+    competitor2_fb = forms.URLField(label="Competitor 2 Facebook", required=False)
+    competitor2_ig = forms.URLField(label="Competitor 2 Instagram", required=False)
+
+    def clean(self):
+        cleaned = super().clean()
+        if (cleaned.get("competitor2_fb") or cleaned.get("competitor2_ig")) and not cleaned.get("competitor2_site"):
+            raise ValidationError("Provide competitor 2 website if you add its social links.")
+        return cleaned
+
+    def save(self, brand):
+        report = Report.objects.create(owner=brand, your_site=self.cleaned_data["your_site"])
+
+        Competitor.objects.create(
+            report=report,
+            name="Competitor 1",
+            website=self.cleaned_data["competitor1_site"],
+            facebook_url=self.cleaned_data.get("competitor1_fb", ""),
+            instagram_url=self.cleaned_data.get("competitor1_ig", "")
+        )
+
+        if self.cleaned_data.get("competitor2_site"):
+            Competitor.objects.create(
+                report=report,
+                name="Competitor 2",
+                website=self.cleaned_data["competitor2_site"],
+                facebook_url=self.cleaned_data.get("competitor2_fb", ""),
+                instagram_url=self.cleaned_data.get("competitor2_ig", "")
+            )
+
+        return report
+
+
+# ===== FILE: C:\Syed\market_insights\core\forms\__init__.py =====
+
+# core/forms/__init__.py
+from .input_form import InputWizardForm
+
+
+# ===== FILE: C:\Syed\market_insights\core\forms\__pycache__\input_form.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\forms\__pycache__\input_form.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\forms\__pycache__\__init__.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\forms\__pycache__\__init__.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\migrations\0001_initial.py =====
+
+# Generated by Django 5.0.14 on 2025-05-15 07:04
+
+import django.db.models.deletion
+import django.utils.timezone
+import fernet_fields.fields
+import uuid
+from django.conf import settings
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    initial = True
+
+    dependencies = [
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name='Brand',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('name', models.CharField(blank=True, max_length=128)),
+                ('website', models.URLField(blank=True, null=True)),
+                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
+            ],
+        ),
+        migrations.CreateModel(
+            name='Report',
+            fields=[
+                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ('created_at', models.DateTimeField(default=django.utils.timezone.now)),
+                ('status', models.CharField(choices=[('queued', 'Queued'), ('running', 'Running'), ('ready', 'Ready'), ('error', 'Error')], default='queued', max_length=8)),
+                ('ai_insight', models.TextField(blank=True, default='')),
+                ('your_site', models.URLField()),
+                ('data', models.JSONField(blank=True, default=dict)),
+                ('pdf_path', models.FilePathField(blank=True, match='.*\\.pdf$', null=True, path='reports')),
+                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.brand')),
+            ],
+        ),
+        migrations.CreateModel(
+            name='Competitor',
+            fields=[
+                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ('name', models.CharField(default='Competitor', max_length=120)),
+                ('website', models.URLField()),
+                ('facebook_url', models.URLField(blank=True)),
+                ('instagram_url', models.URLField(blank=True)),
+                ('twitter_handle', models.CharField(blank=True, max_length=60)),
+                ('report', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='competitors', to='core.report')),
+            ],
+        ),
+        migrations.CreateModel(
+            name='BrandOAuthToken',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('provider', models.CharField(choices=[('meta', 'Meta (FB/Insta)'), ('ga4', 'Google Analytics 4'), ('shopify', 'Shopify')], max_length=12)),
+                ('access_token', fernet_fields.fields.EncryptedTextField()),
+                ('refresh_token', fernet_fields.fields.EncryptedTextField(blank=True, null=True)),
+                ('expires_at', models.DateTimeField()),
+                ('scope', models.TextField(blank=True)),
+                ('brand', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='oauth_tokens', to='core.brand')),
+            ],
+            options={
+                'unique_together': {('brand', 'provider')},
+            },
+        ),
+        migrations.CreateModel(
+            name='MetricSnapshot',
+            fields=[
+                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ('metric_name', models.CharField(max_length=64)),
+                ('value', models.FloatField(blank=True, null=True)),
+                ('raw_json', models.JSONField()),
+                ('fetched_at', models.DateTimeField(db_index=True, default=django.utils.timezone.now)),
+                ('brand', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='snapshots', to='core.brand')),
+                ('report', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='snapshots', to='core.report')),
+            ],
+            options={
+                'indexes': [models.Index(fields=['brand', 'metric_name', 'fetched_at'], name='core_metric_brand_i_fc16ed_idx')],
+                'unique_together': {('brand', 'metric_name', 'fetched_at')},
+            },
+        ),
+    ]
+
+
+# ===== FILE: C:\Syed\market_insights\core\migrations\__init__.py =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\core\migrations\__pycache__\0001_initial.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\migrations\__pycache__\0001_initial.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\migrations\__pycache__\__init__.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\migrations\__pycache__\__init__.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\models\metrics.py =====
+
+"""MetricSnapshot records every individual KPI pull so we can rewind history.
+Each snapshot stores both the *numeric value* we will chart later and the
+*raw JSON* response for auditability / recalculation.
+"""
+from __future__ import annotations
+
+import uuid
+from django.db import models
+from django.utils import timezone
+
+# Forward import — avoids circular when running migrations
+from core.models.oauth import Brand  # pragma: no cover
+from core.models.report import Report  # pragma: no cover
+
+__all__ = ["MetricSnapshot"]
+
+
+class MetricSnapshot(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # The report that triggered this pull (nullable so we can reuse for trend jobs)
+    report = models.ForeignKey(
+        Report,
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+        null=True,
+        blank=True,
+    )
+
+    # Which brand this metric belongs to (user brand or competitor)
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+    )
+
+    metric_name = models.CharField(max_length=64)
+    value = models.FloatField(null=True, blank=True)
+    raw_json = models.JSONField()
+
+    fetched_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["brand", "metric_name", "fetched_at"]),
+        ]
+        unique_together = (
+            "brand",
+            "metric_name",
+            "fetched_at",
+        )
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.brand} | {self.metric_name} @ {self.fetched_at:%Y‑%m‑%d %H:%M}"
+
+# ===== FILE: C:\Syed\market_insights\core\models\oauth.py =====
+
+"""Models for storing encrypted OAuth tokens and refreshing them on demand."""
+from __future__ import annotations
+from datetime import timedelta
+import requests
+from django.conf import settings
+from django.db import models
+from django.utils import timezone
+from fernet_fields import EncryptedTextField
+
+__all__ = [
+    "Brand",
+    "BrandOAuthToken",
+]
+
+class Brand(models.Model):
+    """Represents the user’s own brand/workspace."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    name = models.CharField(max_length=128, blank=True)
+    website = models.URLField(blank=True, null=True)
+
+    def __str__(self) -> str:
+        return self.name or f"Brand<{self.pk}>"
+
+
+class BrandOAuthToken(models.Model):
+    """Encrypted, refreshable token per (brand, provider)."""
+
+    PROVIDER_META = "meta"
+    PROVIDER_GA4 = "ga4"
+    PROVIDER_SHOPIFY = "shopify"
+    PROVIDER_CHOICES = [
+        (PROVIDER_META, "Meta (FB/Insta)"),
+        (PROVIDER_GA4, "Google Analytics 4"),
+        (PROVIDER_SHOPIFY, "Shopify"),
+    ]
+
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="oauth_tokens")
+    provider = models.CharField(max_length=12, choices=PROVIDER_CHOICES)
+    access_token = EncryptedTextField()
+    refresh_token = EncryptedTextField(blank=True, null=True)
+    expires_at = models.DateTimeField()
+    scope = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ("brand", "provider")
+
+    def __str__(self):
+        return f"{self.brand}:{self.provider}"
+
+    def is_expired(self) -> bool:
+        return timezone.now() >= self.expires_at - timedelta(minutes=5)
+
+    def refresh_if_needed(self):
+        if not self.is_expired():
+            return  # still valid
+        if self.provider == self.PROVIDER_META:
+            self._refresh_meta()
+        elif self.provider == self.PROVIDER_GA4:
+            self._refresh_ga4()
+        elif self.provider == self.PROVIDER_SHOPIFY:
+            # Shopify tokens do not expire by default – noop
+            return
+        self.save(update_fields=["access_token", "refresh_token", "expires_at"])
+
+    # ──────────────────────────── provider‑specific flows ─────────────────────────────
+    def _refresh_meta(self):
+        """Exchange the *long‑lived* token for a new long‑lived token."""
+        url = "https://graph.facebook.com/v19.0/oauth/access_token"
+        params = {
+            "grant_type": "fb_exchange_token",
+            "client_id": settings.META_CLIENT_ID,
+            "client_secret": settings.META_CLIENT_SECRET,
+            "fb_exchange_token": self.refresh_token,
+        }
+        data = requests.get(url, params=params, timeout=15).json()
+        self.access_token = data["access_token"]
+        self.refresh_token = data["access_token"]  # Meta reuses long-lived token
+        self.expires_at = timezone.now() + timedelta(seconds=data.get("expires_in", 60 * 60 * 24 * 60))
+
+    def _refresh_ga4(self):
+        url = "https://oauth2.googleapis.com/token"
+        payload = {
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+            "refresh_token": self.refresh_token,
+            "grant_type": "refresh_token",
+        }
+        data = requests.post(url, data=payload, timeout=15).json()
+        self.access_token = data["access_token"]
+        self.expires_at = timezone.now() + timedelta(seconds=data["expires_in"])
+
+
+# ===== FILE: C:\Syed\market_insights\core\models\report.py =====
+
+"""Models for competitor capture and report generation queue."""
+from __future__ import annotations
+import uuid
+from django.db import models
+from django.utils import timezone
+
+from .oauth import Brand  # one Brand per logged‑in workspace
+
+class Report(models.Model):
+    STATUS_CHOICES = [
+        ("queued", "Queued"),
+        ("running", "Running"),
+        ("ready", "Ready"),
+        ("error", "Error"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(Brand, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=8, choices=STATUS_CHOICES, default="queued")
+    ai_insight = models.TextField(blank=True, default="")
+
+    # main site (our brand)
+    your_site = models.URLField()
+
+    # JSON blob where Celery drops raw metrics / KPI table once compiled
+    data = models.JSONField(default=dict, blank=True)
+
+    # PDF path (filled when WeasyPrint export finishes)
+    pdf_path = models.FilePathField(path="reports", match=r".*\.pdf$", null=True, blank=True)
+
+    def __str__(self):
+        return f"Report {self.pk} ({self.get_status_display()})"
+
+
+class Competitor(models.Model):
+    """Up‑to‑two competitor rows attached to a Report."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    report = models.ForeignKey(Report, related_name="competitors", on_delete=models.CASCADE)
+
+    name = models.CharField(max_length=120, default="Competitor")
+    website = models.URLField()
+    facebook_url = models.URLField(blank=True)
+    instagram_url = models.URLField(blank=True)
+    twitter_handle = models.CharField(max_length=60, blank=True)
+
+    def __str__(self):
+        return self.website
+
+# ===== FILE: C:\Syed\market_insights\core\models\__init__.py =====
+
+from .oauth import *
+from .report import *
+from .metrics import *
+
+
+# ===== FILE: C:\Syed\market_insights\core\models\__pycache__\metrics.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\models\__pycache__\metrics.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\models\__pycache__\oauth.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\models\__pycache__\oauth.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\models\__pycache__\report.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\models\__pycache__\report.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\models\__pycache__\__init__.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\models\__pycache__\__init__.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\connect.py =====
+
+# core/views/connect.py
+
+from django.views.generic import TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
+
+class ConnectDataView(LoginRequiredMixin, TemplateView):
+    template_name = "connect_data.html"
+
+    # Stubbed GET handler; in future you’ll swap in real OAuth callbacks here
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\dashboard.py =====
+
+# core/views/dashboard.py
+
+from __future__ import annotations
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import TemplateView, RedirectView
+from utils.kpi import build_kpi_dataframe as compute_kpi_frame
+from utils.trends import pct_delta
+from core.models.oauth import Brand
+from core.models.metrics import MetricSnapshot
+
+class DashboardRedirectView(RedirectView):
+    """
+    If a user hits “/” and has no report yet, send them to ConnectData.
+    """
+    pattern_name = "connect_data"
+
+class DashboardView(LoginRequiredMixin, TemplateView):
+    """
+    Shows the KPI dashboard for each Brand the user owns.
+    """
+    template_name = "dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # all Brand workspaces owned by this user
+        brands = Brand.objects.filter(user=self.request.user)
+
+        rows: list[dict] = []
+        for brand in brands:
+            # Build current vs previous KPI frames
+            current = compute_kpi_frame(brand.latest_report.id)
+            prev_report = getattr(brand.latest_report, "previous", None)
+            prev_df = compute_kpi_frame(prev_report.id) if prev_report else None
+
+            # Pick four flagship metrics
+            flagship = [
+                ("Domain Authority", "domain_authority"),
+                ("Sessions", "sessions"),
+                ("IG Reach", "ig_reach"),
+                ("Conv Rate", "conversion_rate"),
+            ]
+            cells = []
+            for label, key in flagship:
+                new_val = current.loc[key, brand.name]
+                arrow, pct = "→", 0.0
+                if prev_df is not None and key in prev_df.index:
+                    old_val = prev_df.loc[key, brand.name]
+                    arrow, pct = pct_delta(new_val, old_val)
+                cells.append({
+                    "label": label,
+                    "value": new_val,
+                    "arrow": arrow,
+                    "pct": pct,
+                })
+
+            rows.append({
+                "brand": brand.name,
+                "cells": cells,
+                "report": brand.latest_report,
+            })
+
+        ctx["rows"] = rows
+        return ctx
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\input.py =====
+
+# core/views/input.py
+
+from django.views import View
+from django.shortcuts import render, redirect
+from django.contrib.auth.mixins import LoginRequiredMixin
+
+from core.forms.input_form import InputWizardForm
+from core.models.oauth import Brand
+from core.views.oauth import _get_or_create_brand
+
+
+class InputFormView(LoginRequiredMixin, View):
+    """
+    Simple form view to collect the two competitor URLs (and optional socials)
+    """
+    template_name = "input_form.html"
+
+    def get(self, request):
+        form = InputWizardForm()
+        return render(request, self.template_name, {"form": form})
+
+    def post(self, request):
+        form = InputWizardForm(request.POST)
+        if form.is_valid():
+            # 1) ensure there's a Brand tied to this user:
+            brand = _get_or_create_brand(request)
+            # 2) form.save() will create Report + Competitor rows under that Brand
+            report = form.save(brand)
+            # 3) redirect to the “report queued” page
+            return redirect("report_queued")
+        return render(request, self.template_name, {"form": form})
+
+
+class InputWizardView(InputFormView):
+    """
+    Alias for backward compatibility (if you ever need a separate wizard URL).
+    """
+    pass
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\oauth.py =====
+
+from __future__ import annotations
+import hmac
+import hashlib,  uuid
+import requests
+from datetime import timedelta
+from urllib.parse import urlencode
+from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views import View
+
+from core.models.oauth import Brand, BrandOAuthToken
+
+# Decorator to require login on class-based views
+login_req = method_decorator(login_required, name="dispatch")
+
+
+def _get_or_create_brand(request: HttpRequest) -> Brand:
+    """
+    Find or create a Brand tied to the current user.
+    """
+    brand, _ = Brand.objects.get_or_create(
+        user=request.user,
+        defaults={"name": request.user.username}
+    )
+    return brand
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Meta (Facebook / Instagram) OAuth
+# ─────────────────────────────────────────────────────────────────────────────
+@login_req
+class MetaOAuthStartView(View):
+    def get(self, request: HttpRequest) -> HttpResponse:
+        # Build redirect URI for callback
+        redirect_uri = request.build_absolute_uri(reverse("oauth-meta-callback"))
+        params = {
+            "client_id": settings.META_APP_ID,
+            "redirect_uri": redirect_uri,
+            "state": str(request.user.pk),
+            "scope": "pages_show_list,instagram_basic,instagram_manage_insights,business_management",
+            "response_type": "code",
+        }
+        auth_url = f"https://www.facebook.com/v19.0/dialog/oauth?{urlencode(params)}"
+        return redirect(auth_url)
+
+
+@login_req
+class MetaOAuthCallbackView(View):
+    def get(self, request: HttpRequest) -> HttpResponse:
+        # Handle denial or errors
+        if "error" in request.GET:
+            return HttpResponseBadRequest(request.GET.get("error_description", "OAuth error"))
+        code = request.GET.get("code")
+        if not code:
+            return HttpResponseBadRequest("Missing `code` param")
+
+        # 1) Exchange code for short-lived user token
+        redirect_uri = request.build_absolute_uri(reverse("oauth-meta-callback"))
+        token_url = "https://graph.facebook.com/v19.0/oauth/access_token"
+        params = {
+            "client_id": settings.META_APP_ID,
+            "client_secret": settings.META_APP_SECRET,
+            "redirect_uri": redirect_uri,
+            "code": code,
+        }
+        short_data = requests.get(token_url, params=params, timeout=15).json()
+
+        # 2) Exchange short-lived for long-lived token
+        long_params = {
+            **params,
+            "grant_type": "fb_exchange_token",
+            "fb_exchange_token": short_data.get("access_token"),
+        }
+        long_data = requests.get(token_url, params=long_params, timeout=15).json()
+
+        # 3) Save token and setup Brand
+        brand = _get_or_create_brand(request)
+        BrandOAuthToken.objects.update_or_create(
+            brand=brand,
+            provider=BrandOAuthToken.PROVIDER_META,
+            defaults={
+                "access_token": long_data["access_token"],
+                "refresh_token": long_data["access_token"],  # Meta long-lived token
+                "expires_at": timezone.now() + timedelta(seconds=long_data.get("expires_in", 0)),
+                "scope": params["scope"],
+            },
+        )
+        return redirect("dashboard")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Google Analytics 4 OAuth
+# ─────────────────────────────────────────────────────────────────────────────
+@login_req
+class GA4OAuthStartView(View):
+    def get(self, request: HttpRequest) -> HttpResponse:
+        redirect_uri = request.build_absolute_uri(reverse("oauth-ga4-callback"))
+        params = {
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "https://www.googleapis.com/auth/analytics.readonly",
+            "access_type": "offline",
+            "prompt": "consent",
+            "state": str(request.user.pk),
+        }
+        auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+        return redirect(auth_url)
+
+
+@login_req
+class GA4OAuthCallbackView(View):
+    def get(self, request: HttpRequest) -> HttpResponse:
+        if request.GET.get("error"):
+            return HttpResponseBadRequest(request.GET.get("error_description", "OAuth error"))
+        code = request.GET.get("code")
+        if not code:
+            return HttpResponseBadRequest("Missing `code` param")
+
+        # Exchange code for tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        payload = {
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+            "code": code,
+            "redirect_uri": request.build_absolute_uri(reverse("oauth-ga4-callback")),
+            "grant_type": "authorization_code",
+        }
+        data = requests.post(token_url, data=payload, timeout=15).json()
+
+        brand = _get_or_create_brand(request)
+        BrandOAuthToken.objects.update_or_create(
+            brand=brand,
+            provider=BrandOAuthToken.PROVIDER_GA4,
+            defaults={
+                "access_token": data.get("access_token"),
+                "refresh_token": data.get("refresh_token"),
+                "expires_at": timezone.now() + timedelta(seconds=data.get("expires_in", 0)),
+                "scope": "",  # GA4 scope is implicit
+            },
+        )
+        return redirect("dashboard")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shopify OAuth
+# ─────────────────────────────────────────────────────────────────────────────
+@login_req
+class ShopifyOAuthStartView(View):
+    def get(self, request: HttpRequest) -> HttpResponse:
+        shop = request.GET.get("shop")
+        if not shop:
+            return HttpResponseBadRequest("Missing ?shop= parameter")
+        redirect_uri = request.build_absolute_uri(reverse("oauth-shopify-callback"))
+        params = {
+            "client_id": settings.SHOPIFY_API_KEY,
+            "scope": "read_orders,read_products,read_analytics",
+            "redirect_uri": redirect_uri,
+            "state": str(request.user.pk),
+        }
+        auth_url = f"https://{shop}/admin/oauth/authorize?{urlencode(params)}"
+        return redirect(auth_url)
+
+
+@login_req
+class ShopifyOAuthCallbackView(View):
+    def get(self, request: HttpRequest) -> HttpResponse:
+        shop = request.GET.get("shop")
+        code = request.GET.get("code")
+        hmac_param = request.GET.get("hmac")
+        if not all([shop, code, hmac_param]):
+            return HttpResponseBadRequest("Missing required OAuth params")
+
+        # Validate HMAC
+        query_params = request.GET.dict()
+        query_params.pop("hmac")
+        message = "&".join(sorted(f"{k}={v}" for k, v in query_params.items()))
+        calculated = hmac.new(
+            settings.SHOPIFY_API_SECRET.encode(),
+            message.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(calculated, hmac_param):
+            return HttpResponseBadRequest("HMAC validation failed")
+
+        # Exchange for access token
+        token_url = f"https://{shop}/admin/oauth/access_token"
+        payload = {
+            "client_id": settings.SHOPIFY_API_KEY,
+            "client_secret": settings.SHOPIFY_API_SECRET,
+            "code": code,
+        }
+        data = requests.post(token_url, json=payload, timeout=15).json()
+
+        brand = _get_or_create_brand(request)
+        BrandOAuthToken.objects.update_or_create(
+            brand=brand,
+            provider=BrandOAuthToken.PROVIDER_SHOPIFY,
+            defaults={
+                "access_token": data.get("access_token"),
+                "refresh_token": None,
+                "expires_at": timezone.now() + timedelta(days=3650),
+                "scope": data.get("scope", ""),
+            },
+        )
+        # Save shop domain on brand for later API calls
+        brand.shopify_shop = shop
+        brand.save(update_fields=["shopify_shop"])
+
+        return redirect("dashboard")
+# ─────────────────────────────────────────────────────────────────────────────
+# Facebook Data Deletion Callback + Status Page
+# ─────────────────────────────────────────────────────────────────────────────
+
+@method_decorator(csrf_exempt, name="dispatch")
+class FacebookDataDeletionView(View):
+    """
+    Facebook will POST here when a user requests data deletion.
+    You must respond with exactly:
+      { url: '<status_url>', confirmation_code: '<code>' }
+    (unquoted keys, or FB will reject it).
+    """
+    def post(self, request: HttpRequest) -> HttpResponse:
+        signed_request = request.POST.get("signed_request")
+        if not signed_request:
+            return HttpResponseBadRequest("Missing signed_request")
+
+        # -- decode and verify signed_request (HMAC SHA256) --
+        encoded_sig, payload = signed_request.split(".", 1)
+        sig = encoded_sig.replace("-", "+").replace("_", "/") + "=" * ((4 - len(encoded_sig) % 4) % 4)
+        expected = hmac.new(
+            settings.META_APP_SECRET.encode(),
+            payload.encode(),
+            hashlib.sha256
+        ).digest()
+        if not hmac.compare_digest(base64.b64decode(sig), expected):
+            return HttpResponseBadRequest("Invalid signature")
+
+        data = json.loads(base64.b64decode(payload + "=="))
+        fb_user_id = data.get("user_id")
+        if not fb_user_id:
+            return HttpResponseBadRequest("Missing user_id")
+
+        # TODO: enqueue background job to delete all data for fb_user_id
+
+        # Build the URL for the status page
+        code = uuid.uuid4().hex
+        status_path = reverse("facebook-deletion-status")
+        status_url = request.build_absolute_uri(f"{status_path}?code={code}")
+
+        # Facebook requires unquoted JSON keys in this exact format:
+        resp = HttpResponse(f"{{ url: '{status_url}', confirmation_code: '{code}' }}",
+                            content_type="application/json")
+        return resp
+
+
+class FacebookDeletionStatusView(View):
+    """
+    Renders a simple HTML page confirming receipt of the deletion request.
+    """
+    def get(self, request: HttpRequest) -> HttpResponse:
+        code = request.GET.get("code", "")
+        return render(request, "facebook_deletion_status.html", {"code": code})
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\privacy_and_deletion.py =====
+
+# core/views/privacy_and_deletion.py
+
+from __future__ import annotations
+import hmac, hashlib, base64, json
+
+from django.conf import settings
+from django.http import (
+    HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
+)
+from django.shortcuts import render
+from django.urls import reverse
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.views.decorators.csrf import csrf_exempt
+from django.views.generic import TemplateView
+
+class PrivacyPolicyView(TemplateView):
+    """
+    Serves your site’s privacy policy.
+    """
+    template_name = "privacy_policy.html"
+
+
+class FacebookDataDeletionInstructionsView(TemplateView):
+    """
+    A simple page explaining to users how to request deletion.
+    """
+    template_name = "facebook_data_deletion_instructions.html"
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class FacebookDataDeletionCallbackView(View):
+    """
+    Receives Facebook’s signed_request webhook to delete a user’s data.
+    Responds with JSON pointing FB at the completion‐status endpoint.
+    """
+    def post(self, request: HttpRequest) -> HttpResponse:
+        signed_request = request.POST.get("signed_request")
+        if not signed_request:
+            return HttpResponseBadRequest("Missing signed_request parameter.")
+
+        try:
+            encoded_sig, payload = signed_request.split(".", 1)
+            sig = base64.urlsafe_b64decode(encoded_sig + "==")
+            data = json.loads(base64.urlsafe_b64decode(payload + "=="))
+        except Exception:
+            return HttpResponseBadRequest("Invalid signed_request.")
+
+        # Verify signature
+        expected = hmac.new(
+            settings.META_APP_SECRET.encode(),
+            msg=payload.encode(),
+            digestmod=hashlib.sha256,
+        ).digest()
+        if not hmac.compare_digest(sig, expected):
+            return HttpResponseBadRequest("Invalid signature.")
+
+        user_id = data.get("user_id")
+        # TODO: actually delete all data for this FB user ID in your system.
+        # For now we just echo back a “deletion_request_id”:
+        deletion_request_id = user_id
+
+        callback_url = request.build_absolute_uri(
+            reverse("facebook_data_deletion_complete")
+        ) + f"?deletion_request_id={deletion_request_id}"
+
+        return JsonResponse({"url": callback_url})
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class FacebookDataDeletionCompleteView(View):
+    """
+    Facebook will poll this URL with the deletion_request_id you returned above.
+    You must return JSON { "status": "complete" } once deletion is done.
+    """
+    def get(self, request: HttpRequest) -> HttpResponse:
+        # In a real app you’d check deletion_request_id to see if it's finished.
+        return JsonResponse({"status": "complete"})
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\report.py =====
+
+# core/views/report.py
+
+from __future__ import annotations
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, render
+from django.views.generic import View
+from django.contrib.auth.mixins import LoginRequiredMixin
+
+from core.models.report import Report
+from utils.kpi import build_kpi_dataframe
+
+class ReportDetailView(LoginRequiredMixin, View):
+    """
+    Renders the HTML report or serves the PDF for download/inline.
+    """
+    def get(self, request, pk: str):
+        report = get_object_or_404(Report, pk=pk, owner__user=request.user)
+        fmt = request.GET.get("format", "html")
+        if fmt == "pdf":
+            if not report.pdf_path:
+                return HttpResponse("PDF not generated", status=404)
+            with open(report.pdf_path, "rb") as fh:
+                resp = HttpResponse(fh.read(), content_type="application/pdf")
+                resp["Content-Disposition"] = f"inline; filename=report-{pk}.pdf"
+                return resp
+
+        # HTML view
+        kpi_frame = build_kpi_dataframe(report.id)
+        return render(request, "report.html", {"report": report, "kpi_frame": kpi_frame})
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\__init__.py =====
+
+# core/views/__init__.py
+
+from core.views.connect import ConnectDataView
+from core.views.dashboard import DashboardView, DashboardRedirectView
+from core.views.input import InputFormView, InputWizardView
+from core.views.oauth import (
+    MetaOAuthStartView, MetaOAuthCallbackView,
+    GA4OAuthStartView, GA4OAuthCallbackView,
+    ShopifyOAuthStartView, ShopifyOAuthCallbackView,
+    FacebookDataDeletionView, FacebookDeletionStatusView,
+)
+from core.views.report import ReportDetailView
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\__pycache__\connect.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\views\__pycache__\connect.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\__pycache__\dashboard.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\views\__pycache__\dashboard.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\__pycache__\input.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\views\__pycache__\input.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\__pycache__\oauth.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\views\__pycache__\oauth.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\__pycache__\privacy_and_deletion.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\views\__pycache__\privacy_and_deletion.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\__pycache__\report.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\views\__pycache__\report.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\views\__pycache__\__init__.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\views\__pycache__\__init__.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\__pycache__\admin.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\__pycache__\admin.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\__pycache__\forms.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\__pycache__\forms.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\__pycache__\urls.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\__pycache__\urls.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\__pycache__\views.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\__pycache__\views.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\core\__pycache__\__init__.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\core\__pycache__\__init__.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\market_insights\asgi.py =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\market_insights\celery.py =====
+
+import os
+from celery import Celery
+from django.conf import settings
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'market_insights.settings')
+app = Celery('market_insights')
+app.config_from_object('django.conf:settings', namespace='CELERY')
+app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
+
+# ===== FILE: C:\Syed\market_insights\market_insights\settings.py =====
+
+from pathlib import Path
+import environ, os
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+env = environ.Env(
+    DEBUG=(bool, False)
+)
+
+# Load environment variables from .env if in debug
+if env('DJANGO_DEBUG', default=False):
+    environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+
+# SECURITY
+SECRET_KEY = env('DJANGO_SECRET_KEY')
+DEBUG      = env.bool('DJANGO_DEBUG', default=False)
+
+# OAuth credentials for third-party integrations
+META_APP_ID         = env('META_APP_ID', default='')
+META_APP_SECRET     = env('META_APP_SECRET', default='')  
+GOOGLE_CLIENT_ID    = env('GOOGLE_CLIENT_ID', default='')
+GOOGLE_CLIENT_SECRET= env('GOOGLE_CLIENT_SECRET', default='')
+SHOPIFY_API_KEY = env('SHOPIFY_API_KEY', default='')
+SHOPIFY_API_SECRET = env('SHOPIFY_API_SECRET', default='')
+
+ALLOWED_HOSTS = ['*']
+
+# Django templates
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+INSTALLED_APPS = [
+    'django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes',
+    'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles',
+    'django.contrib.sites','crispy_forms',
+    'crispy_tailwind', 
+    # third-party
+    'allauth', 'allauth.account', 'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.facebook',
+    "fernet_fields",
+    # local
+    'core',
+    'django_celery_beat',
+]
+
+ROOT_URLCONF = "market_insights.urls"
+SITE_ID = 1
+
+AUTHENTICATION_BACKENDS = (
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+)
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
+]
+
+CRISPY_ALLOWED_TEMPLATE_PACKS = "tailwind", "bootstrap5"
+CRISPY_TEMPLATE_PACK = "tailwind"
+
+LOGIN_REDIRECT_URL = 'connect_data'
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
+
+# Database / Redis / Celery
+DATABASES = {'default': env.db()}
+REDIS_URL = env('REDIS_URL')
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+
+# Timezone
+TIME_ZONE = "UTC"
+
+# Static & media
+STATIC_URL   = 'static/'
+STATIC_ROOT  = BASE_DIR / 'staticfiles'
+MEDIA_URL    = '/media/'
+MEDIA_ROOT   = BASE_DIR / 'media'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Celery settings
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
+# WeasyPrint
+WEASYPRINT_BASEURL = str(STATIC_ROOT)
+
+# DeepSeek
+DEEPSEEK_API_KEY = env("DEEPSEEK_API_KEY", default="YOUR_PLACEHOLDER_KEY")
+
+
+# ===== FILE: C:\Syed\market_insights\market_insights\urls.py =====
+
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('accounts/', include('allauth.urls')),  # login/signup
+    path('', include('core.urls')),              # step‑flow pages
+]
+
+# ===== FILE: C:\Syed\market_insights\market_insights\wsgi.py =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\market_insights\__init__.py =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\market_insights\__pycache__\settings.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\market_insights\__pycache__\settings.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\market_insights\__pycache__\urls.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\market_insights\__pycache__\urls.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\market_insights\__pycache__\__init__.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\market_insights\__pycache__\__init__.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\static\css\app.css =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\templates\base.html =====
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Market Insights{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.2/dist/tailwind.min.css" rel="stylesheet"/>
+</head>
+<body class="min-h-screen bg-gray-50">
+  <nav class="py-4 bg-white shadow">
+    <div class="container mx-auto flex justify-between">
+      <a class="font-bold" href="/">Market Insights</a>
+      {% if user.is_authenticated %}
+        <span>Hello {{ user.username }}</span>
+        <a href="/accounts/logout/" class="text-indigo-600">Log out</a>
+      {% endif %}
+    </div>
+  </nav>
+  <main class="container mx-auto py-8">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
+
+# ===== FILE: C:\Syed\market_insights\templates\connect_data.html =====
+
+{% extends 'base.html' %}
+{% block title %}Connect Your Data{% endblock %}
+
+{% block content %}
+  <h1 class="text-2xl font-semibold mb-4">Step 2 – Connect your data sources</h1>
+  <p>Click below to authorise each platform. We only need <strong>read-only</strong> permissions.</p>
+  <div class="mt-6 space-y-3">
+    <!-- Facebook & Instagram -->
+    <a
+      href="{% url 'oauth-meta-start' %}"
+      class="block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+    >
+      Connect Facebook / Instagram
+    </a>
+
+    <!-- Google Analytics 4 -->
+    <a
+      href="{% url 'oauth-ga4-start' %}"
+      class="block px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+    >
+      Connect Google Analytics 4
+    </a>
+
+    <!-- Shopify -->
+    <form method="get" action="{% url 'oauth-shopify-start' %}" class="flex space-x-2">
+      <input
+        type="text"
+        name="shop"
+        placeholder="your-shop-name.myshopify.com"
+        class="flex-1 px-3 py-2 border rounded"
+        required
+      />
+      <button
+        type="submit"
+        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+      >Connect Shopify</button>
+    </form>
+  </div>
+
+  <a
+    href="{% url 'input_form' %}"
+    class="mt-8 inline-block text-indigo-600 hover:underline"
+  >Skip for now &rarr;</a>
+{% endblock %}  
+
+# ===== FILE: C:\Syed\market_insights\templates\dashboard.html =====
+
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-6">KPI Dashboard</h1>
+<table class="w-full text-sm">
+  <thead class="bg-gray-100">
+    <tr>
+      <th class="p-2 text-left">Brand</th>
+      <th class="p-2 text-left">Metric</th>
+      <th class="p-2 text-left">Value</th>
+      <th class="p-2 text-left">WoW Δ</th>
+      <th class="p-2 text-left">Report</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+      {% for cell in row.cells %}
+      <tr class="border-b last:border-none">
+        {% if forloop.first %}
+        <td class="p-2 font-medium" rowspan="{{ row.cells|length }}">{{ row.brand }}</td>
+        {% endif %}
+        <td class="p-2">{{ cell.label }}</td>
+        <td class="p-2">{{ cell.value|floatformat:1 }}</td>
+        <td class="p-2">{{ cell.arrow }} {{ cell.pct }}%</td>
+        {% if forloop.first %}
+        <td class="p-2" rowspan="{{ row.cells|length }}">
+          <a href="{{ row.report.get_absolute_url }}" class="text-indigo-600">View</a>
+          &nbsp;|&nbsp;
+          <a href="{{ row.report.pdf_url }}" class="text-indigo-600">PDF</a>
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+
+# ===== FILE: C:\Syed\market_insights\templates\facebook_data_deletion_instructions.html =====
+
+{% extends "base.html" %}
+{% block title %}Delete My Data{% endblock %}
+{% block content %}
+<h1>Request Data Deletion</h1>
+<p>To have all of your data removed from our system, please click the button below:</p>
+<form action="" method="post">
+  {% csrf_token %}
+  <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded">
+    Delete My Account & Data
+  </button>
+</form>
+<p>Or email us at <a href="mailto:support@yourdomain.com">support@yourdomain.com</a>.</p>
+{% endblock %}
+
+
+# ===== FILE: C:\Syed\market_insights\templates\facebook_deletion_status.html =====
+
+{# templates/facebook_deletion_status.html #}
+{% extends "base.html" %}
+{% block title %}Data Deletion Status{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto text-center py-16">
+  <h1 class="text-2xl font-semibold mb-4">Data Deletion Requested</h1>
+  <p>Your request has been received and is being processed.</p>
+  {% if code %}
+    <p class="mt-4 text-sm">Confirmation code: <code>{{ code }}</code></p>
+  {% endif %}
+  <p class="mt-6">
+    You will receive an email when deletion is complete.
+  </p>
+</div>
+{% endblock %}
+
+
+# ===== FILE: C:\Syed\market_insights\templates\input_form.html =====
+
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}Enter competitor URLs{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-4">Step 3 – Tell us who to compare</h1>
+<form method="post" class="space-y-4">{% csrf_token %}{{ form|crispy }}
+  <button class="px-6 py-2 bg-indigo-600 text-white rounded" type="submit">Generate Report</button>
+</form>
+{% endblock %}
+
+# ===== FILE: C:\Syed\market_insights\templates\input_wizard.html =====
+
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Create Competitive‑Intel Report{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-semibold mb-6">Step 3: Add competitors & generate report</h1>
+
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <fieldset class="border p-4 rounded-xl shadow-sm">
+      <legend class="font-medium">Your brand</legend>
+      {{ form.your_site.label_tag }}
+      {{ form.your_site }}
+      {{ form.your_site.errors }}
+    </fieldset>
+
+    <fieldset class="border p-4 rounded-xl shadow-sm">
+      <legend class="font-medium">Competitor 1 (required)</legend>
+      {{ form.competitor1_site.label_tag }} {{ form.competitor1_site }} {{ form.competitor1_site.errors }}<br>
+      {{ form.competitor1_fb.label_tag }} {{ form.competitor1_fb }} {{ form.competitor1_fb.errors }}<br>
+      {{ form.competitor1_ig.label_tag }} {{ form.competitor1_ig }} {{ form.competitor1_ig.errors }}
+    </fieldset>
+
+    <fieldset class="border p-4 rounded-xl shadow-sm">
+      <legend class="font-medium">Competitor 2 (optional)</legend>
+      {{ form.competitor2_site.label_tag }} {{ form.competitor2_site }} {{ form.competitor2_site.errors }}<br>
+      {{ form.competitor2_fb.label_tag }} {{ form.competitor2_fb }} {{ form.competitor2_fb.errors }}<br>
+      {{ form.competitor2_ig.label_tag }} {{ form.competitor2_ig }} {{ form.competitor2_ig.errors }}
+    </fieldset>
+
+    <button type="submit" class="mt-4 px-6 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Generate report</button>
+  </form>
+</div>
+{% endblock %}
+
+# ===== FILE: C:\Syed\market_insights\templates\privacy_policy.html =====
+
+{% extends "base.html" %}
+{% block title %}Privacy Policy{% endblock %}
+{% block content %}
+<h1>Privacy Policy</h1>
+<p>Your privacy is very important to us.  We collect only the data required to provide our service:</p>
+<ul>
+  <li>Facebook/Instagram Insights (read-only)</li>
+  <li>Google Analytics 4 metrics</li>
+  <li>Shopify order data</li>
+</ul>
+<p>We do not share your data with third parties except as required by law.</p>
+<p>If you have questions, contact us at <a href="mailto:syed@younoh.com">syed@younoh.com</a>.</p>
+{% endblock %}
+
+
+# ===== FILE: C:\Syed\market_insights\templates\report.html =====
+
+{% load static %}
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Competitive Intelligence Report – {{ report.brand.name }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.4/dist/tailwind.min.css" rel="stylesheet" />
+  <style> @page { margin: 32px; } </style>
+</head>
+<body class="font-sans bg-white text-slate-900">
+  <header class="mb-8">
+    <h1 class="text-3xl font-bold">Market Position Report</h1>
+    <p class="text-sm text-slate-500">Generated {{ report.generated_at|date:"Y‑m‑d H:i" }}</p>
+  </header>
+
+  <!-- KPI table -->
+  <section class="mb-10">
+    <h2 class="text-xl font-semibold mb-4">Key Performance Indicators</h2>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-100">
+          <tr>
+            <th class="px-3 py-2 text-left font-semibold">KPI</th>
+            {% for col in kpi_frame.columns %}
+              <th class="px-3 py-2 text-left font-semibold">{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for row in kpi_frame.itertuples %}
+            <tr>
+              <td class="px-3 py-2 whitespace-nowrap font-medium">{{ row.Index }}</td>
+              {% for val in row[1:] %}
+                <td class="px-3 py-2 whitespace-nowrap">{{ val }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- DeepSeek insight -->
+  {% if report.ai_insight %}
+  <section class="prose max-w-none">
+    <h2 class="text-xl font-semibold mb-2">AI‑Generated Recommendations</h2>
+    {{ report.ai_insight|safe }}
+  </section>
+  {% endif %}
+</body>
+</html>
+
+# ===== FILE: C:\Syed\market_insights\templates\report_queued.html =====
+
+{% extends "base.html" %}
+{% block title %}Report queued{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto text-center py-16">
+  <h1 class="text-2xl font-semibold mb-4">🎉 Report queued!</h1>
+  <p class="text-gray-700">We’ll email you as soon as it’s ready. You can safely close this window.</p>
+</div>
+{% endblock %}
+
+# ===== FILE: C:\Syed\market_insights\templates\report_ready.html =====
+
+{% extends "base.html" %}
+{% block content %}
+  <div class="max-w-2xl mx-auto py-10">
+    <h1 class="text-2xl font-bold mb-4">Report ready 🎉</h1>
+    <p class="mb-6">Your competitive‑intelligence report has been generated.</p>
+    <a class="inline-block px-4 py-2 bg-blue-600 text-white rounded-md shadow" href="{{ report.get_absolute_url }}">View Report</a>
+    <a class="inline-block ml-3 px-4 py-2 bg-slate-700 text-white rounded-md" href="{{ report.pdf_url }}" target="_blank">Download PDF</a>
+  </div>
+{% endblock %}
+
+# ===== FILE: C:\Syed\market_insights\templates\registration\login.html =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\templates\registration\signup.html =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\tests\test_oauth.py =====
+
+import pytest, json, importlib
+from django.urls import reverse
+from django.utils import timezone
+
+from core.models.oauth import BrandOAuthToken
+
+pytestmark = pytest.mark.django_db
+
+
+class DummyResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+def patch_requests(monkeypatch, payload):
+    import requests
+    monkeypatch.setattr(requests, "get", lambda *a, **kw: DummyResp(payload))
+    monkeypatch.setattr(requests, "post", lambda *a, **kw: DummyResp(payload))
+
+
+def test_meta_callback_creates_token(client, django_user_model, monkeypatch):
+    user = django_user_model.objects.create_user("u", "u@example.com", "pw")
+    client.force_login(user)
+    patch_requests(
+        monkeypatch,
+        {
+            "access_token": "TEST_ACCESS_TOKEN",
+            "expires_in": 3600,
+        },
+    )
+    resp = client.get(
+        reverse("oauth-meta-callback"),
+        {"code": "dummy", "state": str(user.pk)},
+        follow=True,
+    )
+    assert resp.status_code == 200
+    assert BrandOAuthToken.objects.filter(brand__user=user, provider="meta").exists()
+
+# ===== FILE: C:\Syed\market_insights\tests\utils\test_kpi.py =====
+
+import pandas as pd
+from django.test import TestCase
+
+from core.models.oauth import Brand
+from core.models.report import Report, Competitor
+from core.models.metrics import MetricSnapshot
+from utils.kpi import build_kpi_dataframe
+
+class KPITest(TestCase):
+    def setUp(self):
+        # Create brands
+        self.catmer = Brand.objects.create(name="CatMer")
+        self.comp1 = Brand.objects.create(name="Comp‑A")
+        self.report = Report.objects.create(brand=self.catmer)
+        Competitor.objects.create(report=self.report, brand=self.comp1)
+
+        # Minimal snapshots
+        MetricSnapshot.objects.create(report=self.report, brand=self.catmer,
+                                      metric_name="domain_authority", value=45)
+        MetricSnapshot.objects.create(report=self.report, brand=self.comp1,
+                                      metric_name="domain_authority", value=38)
+
+    def test_dataframe_shape(self):
+        df = build_kpi_dataframe(self.report.id)
+        self.assertEqual(df.shape[0], len(df))  # rows defined by registry
+        self.assertIn("Domain Authority", df["KPI"].tolist())
+
+    def test_values(self):
+        df = build_kpi_dataframe(self.report.id)
+        da_row = df[df["KPI"] == "Domain Authority"].iloc[0]
+        self.assertEqual(da_row["CatMer"], 45)
+        self.assertEqual(da_row["Comp‑A"], 38)
+
+# ===== FILE: C:\Syed\market_insights\utils\api_clients.py =====
+
+"""
+Centralised thin-wrapper clients for all external APIs used in Market Insights.
+
+Each client exposes one or two small helper methods that return **plain Python
+dicts** with *only* the fields the rest of the code relies on. All low-level
+HTTP, auth, paging, retry & error-handling is hidden here so the rest of the
+codebase stays clean.
+
+Environment variables expected
+──────────────────────────────
+MOZ_API_TOKEN                    – OR –  MOZ_ACCESS_ID / MOZ_SECRET
+SERPSTACK_API_KEY
+DATAFORSEO_B64_CREDENTIALS       (base64("login:password"))
+TWITTER_BEARER
+MENTION_ACCESS_TOKEN             (OAuth token)
+SOCIALBLADE_CLIENT_ID
+SOCIALBLADE_TOKEN
+GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET   (user OAuth – GA4 & GBP)
+GOOGLE_CREDENTIALS                          (svc-acct JSON for GBP optional)
+"""
+
+from __future__ import annotations
+import os, json, base64, logging, datetime as dt
+from typing import Dict, Any, List, Optional
+
+import requests
+
+log = logging.getLogger(__name__)
+TIMEOUT = 15
+
+
+# ─────────────────────────────  shared HTTP helpers ──────────────────────────
+def _get(url: str, **kw) -> Dict[str, Any]:
+    r = requests.get(url, timeout=TIMEOUT, **kw)
+    _raise_for_status(r)
+    return r.json()
+
+
+def _post(url: str, **kw) -> Dict[str, Any]:
+    r = requests.post(url, timeout=TIMEOUT, **kw)
+    _raise_for_status(r)
+    return r.json()
+
+
+def _raise_for_status(r: requests.Response) -> None:
+    try:
+        r.raise_for_status()
+    except requests.HTTPError as exc:
+        log.error("API call failed %s → %s – %s", r.request.method, r.url, r.text[:500])
+        raise exc
+
+
+# ═════════════════════════════  MOZ  ════════════════════════════════════════
+class MozClient:
+    """Moz Links API v2 (https://moz.com/products/api/links-api)"""
+
+    BASE = "https://lsapi.seomoz.com/v2"
+
+    def __init__(self) -> None:
+        self.token = os.getenv("MOZ_API_TOKEN")
+        self.access_id = os.getenv("MOZ_ACCESS_ID")
+        self.secret = os.getenv("MOZ_SECRET")
+        if not (self.token or (self.access_id and self.secret)):
+            raise RuntimeError("Configure MOZ_API_TOKEN *or* MOZ_ACCESS_ID / MOZ_SECRET")
+
+    # auth helper ------------------------------------------------------------
+    def _auth(self) -> dict:
+        if self.token:
+            return {"headers": {"x-moz-token": self.token}}
+        return {"auth": (self.access_id, self.secret)}
+
+    # endpoints --------------------------------------------------------------
+    def domain_authority(self, domain: str) -> int:
+        url = f"{self.BASE}/url_metrics"
+        payload = {"targets": [domain], "metrics": ["domain_authority"]}
+        data = _post(url, json=payload, **self._auth())
+        # response shape: {"results":[{"target":"example.com","domain_authority":42.1}]}
+        try:
+            return int(round(data["results"][0]["domain_authority"]))
+        except (KeyError, IndexError):
+            raise RuntimeError(f"Unexpected Moz response: {data}")
+
+    def backlinks(self, domain: str) -> int:
+        url = f"{self.BASE}/links"
+        params = {"target": domain, "limit": 1, "filter": "external"}
+        data = _get(url, params=params, **self._auth())
+        # response shape: {"total_count":12345,"links":[...]}
+        return int(data.get("total_count", 0))
+
+
+# ═════════════════════════════  SERPSTACK  ══════════════════════════════════
+class SerpstackClient:
+    BASE = "https://api.serpstack.com/search"
+
+    def __init__(self) -> None:
+        self.key = os.getenv("SERPSTACK_API_KEY")
+        if not self.key:
+            raise RuntimeError("SERPSTACK_API_KEY not set")
+
+    def serp_features(self, query: str, *, gl: str = "us") -> Dict[str, bool]:
+        """Return presence of featured-snippet & local-pack for **query**."""
+        params = {
+            "access_key": self.key,
+            "query": query,
+            "gl": gl,
+            "output": "json",
+        }
+        data = _get(self.BASE, params=params)
+        answer_box = data.get("answer_box") or {}
+        has_snippet = bool(answer_box.get("type") == "snippet" or data.get("featured_snippets"))
+        has_local_pack = bool(data.get("local_results"))
+        return {"featured_snippet": has_snippet, "local_pack": has_local_pack}
+
+
+# ═════════════════════════════  DATAFORSEO  ═════════════════════════════════
+class DataForSEOClient:
+    ENDPOINT = (
+        "https://api.dataforseo.com/v3/dataforseo_labs/"
+        "google/bulk_traffic_estimation/live"
+    )
+
+    def __init__(self) -> None:
+        cred_b64 = os.getenv("DATAFORSEO_B64_CREDENTIALS")
+        if not cred_b64:
+            raise RuntimeError("DATAFORSEO_B64_CREDENTIALS (base64 login:pass) missing")
+        self.headers = {"Authorization": f"Basic {cred_b64}"}
+
+    def traffic_estimate(
+        self,
+        domains: List[str] | str,
+        *,
+        location_code: int = 2840,
+        language_code: str = "en"
+    ) -> Dict[str, Dict[str, Any]]:
+        if isinstance(domains, str):
+            domains = [domains]
+
+        payload = [
+            {
+                "target": d,
+                "location_code": location_code,
+                "language_code": language_code,
+                "item_types": ["organic", "paid"],
+            }
+            for d in domains
+        ]
+        data = _post(self.ENDPOINT, json=payload, headers=self.headers)
+        try:
+            results = data["tasks"][0]["result"]
+        except (KeyError, IndexError):
+            raise RuntimeError(f"Unexpected DataForSEO response: {data}")
+
+        mapped = {item["target"]: item for item in results}
+        # If only one domain requested ⇒ return its metrics directly
+        if len(domains) == 1:
+            return mapped[domains[0]]
+        return mapped
+
+
+# ═════════════════════════════  TWITTER  ════════════════════════════════════
+class TwitterClient:
+    BASE = "https://api.twitter.com/2/users/by/username"
+
+    def __init__(self) -> None:
+        self.token = os.getenv("TWITTER_BEARER")
+        if not self.token:
+            raise RuntimeError("TWITTER_BEARER missing")
+        self.headers = {"Authorization": f"Bearer {self.token}"}
+
+    def public_metrics(self, handle: str) -> Dict[str, Any]:
+        handle = handle.lstrip("@")
+        url = f"{self.BASE}/{handle}"
+        params = {"user.fields": "public_metrics"}
+        data = _get(url, headers=self.headers, params=params)
+        return data["data"]["public_metrics"]
+
+
+# ═════════════════════════════  MENTION  ════════════════════════════════════
+class MentionClient:
+    BASE = "https://api.mention.net/api"
+
+    def __init__(self) -> None:
+        self.token = os.getenv("MENTION_ACCESS_TOKEN")
+        self.version = "1.21"
+        if not self.token:
+            raise RuntimeError("MENTION_ACCESS_TOKEN missing")
+
+    def brand_mentions(
+        self,
+        account_id: str,
+        alert_id: str,
+        *,
+        since_days: int = 7
+    ) -> Dict[str, Any]:
+        """
+        Returns volume + %-positive for the last *since_days* days.
+        Caller is responsible for storing account_id / alert_id.
+        """
+        since = (dt.datetime.utcnow() - dt.timedelta(days=since_days)).isoformat(timespec="seconds") + "Z"
+        url = (
+            f"{self.BASE}/accounts/{account_id}/alerts/{alert_id}/mentions"
+            f"?since={since}"
+        )
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Accept-Version": self.version,
+        }
+        data = _get(url, headers=headers)
+        mentions = data.get("mentions", [])
+        volume = len(mentions)
+        positive = sum(1 for m in mentions if m.get("tone") == 1)
+        pct_positive = round((positive / volume) * 100, 1) if volume else 0.0
+        return {"volume": volume, "sentiment_pct": pct_positive}
+
+
+# ═════════════════════════════  SOCIAL BLADE  ═══════════════════════════════
+class SocialBladeClient:
+    BASE = "https://business.socialblade.com/api/v1"
+
+    def __init__(self) -> None:
+        cid = os.getenv("SOCIALBLADE_CLIENT_ID")
+        token = os.getenv("SOCIALBLADE_TOKEN")
+        if not (cid and token):
+            raise RuntimeError("Set SOCIALBLADE_CLIENT_ID & SOCIALBLADE_TOKEN")
+        self.params = {"clientid": cid, "token": token}
+
+    # instagram --------------------------------------------------------------
+    def instagram_stats(self, username: str) -> Dict[str, Any]:
+        url = f"{self.BASE}/instagram/{username.lstrip('@')}"
+        data = _get(url, params=self.params)
+        return self._simplify_instagram(data)
+
+    # backwards-compat alias
+    instagram_profile = instagram_stats
+
+    # facebook ---------------------------------------------------------------
+    def facebook_stats(self, page: str) -> Dict[str, Any]:
+        url = f"{self.BASE}/facebook/{page}"
+        data = _get(url, params=self.params)
+        return self._simplify_facebook(data)
+
+    # helpers ---------------------------------------------------------------
+    @staticmethod
+    def _simplify_instagram(raw: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            stats = raw["data"]["statistics"]["total"]
+        except KeyError:
+            return {}
+        return {
+            "followers": stats.get("followers"),
+            "growth_30d": stats.get("followers_30_days"),
+        }
+
+    @staticmethod
+    def _simplify_facebook(raw: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            stats = raw["data"]["statistics"]["total"]
+        except KeyError:
+            return {}
+        return {"followers": stats.get("followers")}
+
+
+# ═════════════════════════════  GA4 (Analytics Data API)  ═══════════════════
+class GA4Client:
+    API_URL = "https://analyticsdata.googleapis.com/v1/properties/{prop}:runReport"
+
+    def __init__(self, brand):
+        from core.models.oauth import BrandOAuthToken  # local import
+        token_obj = BrandOAuthToken.objects.filter(brand=brand, provider="ga4").first()
+        if not token_obj:
+            raise RuntimeError("Brand has no GA4 token")
+        token_obj.refresh_if_needed()
+        self.access_token = token_obj.access_token
+        if not getattr(brand, "ga4_property_id", None):
+            raise RuntimeError("brand.ga4_property_id not set")
+        self.property_id = str(brand.ga4_property_id)
+
+    def summary(self) -> Dict[str, Any]:
+        body = {
+            "dateRanges": [{"startDate": "30daysAgo", "endDate": "yesterday"}],
+            "metrics": [
+                {"name": "sessions"},
+                {"name": "totalUsers"},
+                {"name": "ecommercePurchases"},
+            ],
+        }
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        url = self.API_URL.format(prop=self.property_id)
+        data = _post(url, json=body, headers=headers)
+        try:
+            row = data["rows"][0]["metricValues"]
+            sessions = int(row[0]["value"])
+            users = int(row[1]["value"])
+            purchases = int(row[2]["value"])
+        except (KeyError, IndexError) as e:
+            raise RuntimeError(f"Unexpected GA4 response: {data}") from e
+        conv_rate = round((purchases / sessions) * 100, 2) if sessions else 0.0
+        return {
+            "sessions": sessions,
+            "users": users,
+            "purchases": purchases,
+            "conversion_rate": conv_rate,
+        }
+
+
+# ═════════════════════════════  META (IG Insights)  ═════════════════════════
+class MetaInsightsClient:
+    GRAPH = "https://graph.facebook.com/v19.0"
+
+    def __init__(self, brand):
+        from core.models.oauth import BrandOAuthToken
+        tok = BrandOAuthToken.objects.filter(brand=brand, provider="meta").first()
+        if not tok:
+            raise RuntimeError("Brand has no Meta token")
+        self.token = tok.access_token
+        if not getattr(brand, "instagram_business_id", None):
+            raise RuntimeError("brand.instagram_business_id not set")
+        self.ig_id = brand.instagram_business_id
+
+    def instagram_insights(self) -> Dict[str, Any]:
+        url = f"{self.GRAPH}/{self.ig_id}/insights"
+        params = {
+            "metric": "reach",
+            "period": "days_28",
+            "access_token": self.token,
+        }
+        data = _get(url, params=params)
+        try:
+            reach_entry = next(
+                item for item in data["data"] if item["name"] == "reach"
+            )
+            reach = reach_entry["values"][-1]["value"]
+            return {"reach": reach}
+        except (KeyError, StopIteration, IndexError):
+            return {}
+
+
+# ═════════════════════════════  GBP (Reviews)  ══════════════════════════════
+class GBPClient:
+    REVIEWS_ENDPOINT = "https://mybusiness.googleapis.com/v4/accounts/{acct}/locations/{loc}/reviews"
+
+    def __init__(self, brand):
+        creds_path = os.getenv("GOOGLE_CREDENTIALS")
+        if not creds_path:
+            raise RuntimeError("GOOGLE_CREDENTIALS path missing")
+        try:
+            from google.oauth2 import service_account
+            from google.auth.transport.requests import AuthorizedSession
+        except ImportError as exc:
+            raise RuntimeError(
+                "google-auth not installed; add to requirements.txt"
+            ) from exc
+        scopes = ["https://www.googleapis.com/auth/business.manage"]
+        creds = service_account.Credentials.from_service_account_file(creds_path, scopes=scopes)
+        self.session = AuthorizedSession(creds)
+        if "/" not in brand.gbp_location_id:
+            raise RuntimeError("brand.gbp_location_id must be 'accountId/locationId'")
+        self.account_id, self.location_id = brand.gbp_location_id.split("/", 1)
+
+    def reviews(self) -> Dict[str, Any]:
+        url = self.REVIEWS_ENDPOINT.format(acct=self.account_id, loc=self.location_id)
+        data = self.session.get(url, timeout=TIMEOUT).json()
+        avg = data.get("averageRating")
+        cnt = data.get("totalReviewCount")
+        if avg is None or cnt is None:
+            # fallback: derive from individual reviews list
+            reviews = data.get("reviews", [])
+            cnt = len(reviews)
+            if cnt:
+                score = sum(int(rv.get("starRating", "ZERO")[0]) for rv in reviews)
+                avg = round(score / cnt, 2)
+        return {"rating": avg, "count": cnt}
+    
+class ShopifyClient:
+    """
+    Lightweight wrapper around Shopify Admin REST API.
+    Requires brand.shopify_shop = "<my-shop>.myshopify.com"
+    and a BrandOAuthToken(provider="shopify") with access_token.
+    """
+
+    def __init__(self, brand):
+        from core.models.oauth import BrandOAuthToken
+        token_obj = BrandOAuthToken.objects.filter(
+            brand=brand, provider=BrandOAuthToken.PROVIDER_SHOPIFY
+        ).first()
+        if not token_obj:
+            raise RuntimeError("No Shopify token for this brand")
+        self.token = token_obj.access_token
+        self.shop = brand.shopify_shop
+        if not self.shop:
+            raise RuntimeError("brand.shopify_shop not set")
+
+    def sales_summary(self) -> Dict[str, Any]:
+        """
+        Fetches all orders (status=any) in the last 30 days,
+        sums total_price to compute revenue and AOV.
+        """
+        # Use 2024-01 API version; adjust as needed
+        endpoint = f"https://{self.shop}/admin/api/2024-01/orders.json"
+        params = {
+            "status": "any",
+            "created_at_min": (requests.utils.datetime.datetime.utcnow()
+                               - requests.utils.datetime.timedelta(days=30)
+                               ).isoformat() + "Z",
+            "fields": "total_price"
+        }
+        headers = {"X-Shopify-Access-Token": self.token}
+        data = _get(endpoint, headers=headers, params=params)
+
+        orders = data.get("orders", [])
+        total_revenue = sum(float(o.get("total_price", 0)) for o in orders)
+        count = len(orders)
+        aov = (total_revenue / count) if count else 0.0
+
+        return {"revenue": round(total_revenue, 2), "aov": round(aov, 2)}
+
+# ===== FILE: C:\Syed\market_insights\utils\deepseek.py =====
+
+"""Simple DeepSeek client used for AI recommendations."""
+from __future__ import annotations
+import os, requests
+from typing import Dict, Any
+
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "YOUR_PLACEHOLDER_KEY")
+DEEPSEEK_ENDPOINT = "https://api.deepseek.com/v1/chat/completions"
+
+SYS_PROMPT = (
+    "You are a senior growth strategist. "
+    "Given a KPI comparison table (JSON) for a brand and its competitors, "
+    "return 3–5 concise, actionable recommendations in Markdown bullets. "
+    "Be crisp, quantitative, and avoid generic advice."
+)
+
+
+class DeepSeekError(RuntimeError):
+    """Raised when DeepSeek API returns an error."""
+
+
+def fetch_insight(kpi_json: str, brand_name: str) -> str:
+    """Return Markdown string with recommendations."""
+
+    payload: Dict[str, Any] = {
+        "model": "deepseek-chat",  # replace if you use a different engine
+        "temperature": 0.7,
+        "messages": [
+            {"role": "system", "content": SYS_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"Brand: {brand_name}\nKPI_Table_JSON:\n{kpi_json}\n"\
+                    "Please reply with markdown bullet points only."
+                ),
+            },
+        ],
+    }
+
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    resp = requests.post(DEEPSEEK_ENDPOINT, json=payload, timeout=30)
+    if resp.status_code != 200:
+        raise DeepSeekError(f"{resp.status_code}: {resp.text[:200]}")
+
+    data = resp.json()
+    try:
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception as exc:  # noqa: BLE001
+        raise DeepSeekError("Malformed DeepSeek response") from exc
+
+# ===== FILE: C:\Syed\market_insights\utils\kpi.py =====
+
+"""KPI calculation helper.
+
+Usage:
+    from utils.kpi import build_kpi_dataframe
+    df = build_kpi_dataframe(report_id)
+"""
+from __future__ import annotations
+import math
+from datetime import date
+from typing import Dict, Any
+
+import pandas as pd
+from django.db.models import Max, QuerySet, F
+from core.models.metrics import MetricSnapshot
+from core.models.report import Report, Competitor
+
+# ---------------------------------------------------------------------------
+# 1. KPI registry – one entry per KPI row in the PDF template.
+# ---------------------------------------------------------------------------
+
+class KPI:
+    """Represents one KPI def: metric_name -> callable aggregator -> display units."""
+
+    def __init__(self, key: str, label: str, func):
+        self.key = key          # raw metric_name in MetricSnapshot
+        self.label = label      # label that will be displayed in the table
+        self.func = func        # callable(Series) -> value
+
+    def compute(self, series: pd.Series) -> Any:
+        try:
+            return self.func(series)
+        except Exception:
+            return math.nan
+
+
+_REGISTRY: list[KPI] = [
+    KPI("domain_authority", "Domain Authority", lambda s: s.max()),
+    KPI("total_backlinks", "Total Backlinks", lambda s: s.max()),
+    KPI("estimated_org_visits", "Estimated Organic Visits", lambda s: s.mean()),
+    KPI("estimated_paid_visits", "Estimated Paid Visits", lambda s: s.mean()),
+    KPI("twitter_followers", "Twitter Followers", lambda s: s.max()),
+    KPI("twitter_engagement_rate", "Tweet Engagement %", lambda s: round(s.mean(), 2)),
+    KPI("ig_followers", "Instagram Followers", lambda s: s.max()),
+    KPI("ig_reach", "IG Reach (30d)", lambda s: s.mean()),
+    KPI("ga_sessions", "GA4 Sessions (30d)", lambda s: s.sum()),
+    KPI("ga_purchases", "Purchases (30d)", lambda s: s.sum()),
+    KPI("ga_conversion_rate", "Conversion Rate %", lambda s: round(s.mean(), 2)),
+    KPI("avg_rating", "Google Rating", lambda s: round(s.max(), 2)),
+    KPI("review_count", "Review Count", lambda s: s.max()),
+    KPI("shopify_revenue", "Revenue (30d)", lambda s: s.sum()),
+    KPI("shopify_aov", "Average Order Value", lambda s: round(s.mean(), 2)),
+]
+
+
+# ---------------------------------------------------------------------------
+# 2. Public API – build_kpi_dataframe
+# ---------------------------------------------------------------------------
+
+def build_kpi_dataframe(report_id: int) -> pd.DataFrame:
+    """Return a DataFrame with rows=KPIs and columns=[label, brand, competitor1, competitor2]."""
+
+    report: Report = Report.objects.select_related("brand").get(id=report_id)
+    brands = [report.brand] + list(report.competitors.order_by("id"))
+
+    # Pull latest snapshot per metric per brand within the report's pull window.
+    qs: QuerySet = (
+        MetricSnapshot.objects
+        .filter(report_id=report_id)
+        .values("brand_id", "metric_name")
+        .annotate(latest_pk=Max("id"))
+    )
+
+    latest_ids = [row["latest_pk"] for row in qs]
+    latest_snaps = MetricSnapshot.objects.filter(id__in=latest_ids)
+
+    # Build a DataFrame keyed by (brand, metric_name)
+    df_raw = (
+        pd.DataFrame.from_records(latest_snaps.values("brand_id", "metric_name", "value"))
+        .pivot(index="metric_name", columns="brand_id", values="value")
+    )
+
+    # Create final dataframe
+    data = []
+    for kpi in _REGISTRY:
+        row = [kpi.label]
+        metric = df_raw.loc[kpi.key] if kpi.key in df_raw.index else pd.Series(dtype=float)
+        for brand in brands:
+            val = kpi.compute(metric.get(brand.id, pd.NA)) if not metric.empty else pd.NA
+            row.append(val)
+        data.append(row)
+
+    columns = ["KPI"] + [b.name for b in brands]
+    return pd.DataFrame(data, columns=columns)
+
+# ===== FILE: C:\Syed\market_insights\utils\pdf.py =====
+
+"""Single helper that converts HTML (string) → PDF file path using WeasyPrint."""
+from pathlib import Path
+from uuid import uuid4
+from django.conf import settings
+from weasyprint import HTML
+
+
+REPORT_DIR = Path(settings.REPORT_PDF_DIR)
+REPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+def html_to_pdf(html: str) -> str:
+    filename = REPORT_DIR / f"{uuid4()}.pdf"
+    HTML(string=html, base_url=settings.STATIC_ROOT).write_pdf(target=str(filename))
+    return str(filename)
+
+# ===== FILE: C:\Syed\market_insights\utils\trends.py =====
+
+from __future__ import annotations
+from typing import Tuple
+import math
+
+def pct_delta(new: float, old: float) -> Tuple[str, float]:
+    """Return Unicode arrow ↑/↓/→ and delta %% (rounded)."""
+    if old == 0 or math.isnan(old):
+        return "→", 0.0
+    delta = (new - old) / old * 100
+    arrow = "↑" if delta > 0.5 else "↓" if delta < -0.5 else "→"
+    return arrow, round(delta, 1)
+
+# ===== FILE: C:\Syed\market_insights\utils\__init__.py =====
+
+
+
+# ===== FILE: C:\Syed\market_insights\utils\__pycache__\kpi.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\utils\__pycache__\kpi.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\utils\__pycache__\trends.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\utils\__pycache__\trends.cpython-310.pyc
+
+
+# ===== FILE: C:\Syed\market_insights\utils\__pycache__\__init__.cpython-310.pyc =====
+
+# Skipped binary/unreadable file: C:\Syed\market_insights\utils\__pycache__\__init__.cpython-310.pyc

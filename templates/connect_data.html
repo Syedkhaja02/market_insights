@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Connect Your Data{% endblock %}
+
+{% block content %}
+  <h1 class="text-2xl font-semibold mb-4">Step 2 – Connect your data sources</h1>
+  <p>Click below to authorise each platform. We only need <strong>read-only</strong> permissions.</p>
+  <div class="mt-6 space-y-3">
+    <!-- Facebook & Instagram -->
+    <a
+      href="{% url 'oauth-meta-start' %}"
+      class="block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+    >
+      Connect Facebook / Instagram
+    </a>
+
+    <!-- Google Analytics 4 -->
+    <a
+      href="{% url 'oauth-ga4-start' %}"
+      class="block px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+    >
+      Connect Google Analytics 4
+    </a>
+
+    <!-- Shopify -->
+    <form method="get" action="{% url 'oauth-shopify-start' %}" class="flex space-x-2">
+      <input
+        type="text"
+        name="shop"
+        placeholder="your-shop-name.myshopify.com"
+        class="flex-1 px-3 py-2 border rounded"
+        required
+      />
+      <button
+        type="submit"
+        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+      >Connect Shopify</button>
+    </form>
+  </div>
+
+  <a
+    href="{% url 'input_form' %}"
+    class="mt-8 inline-block text-indigo-600 hover:underline"
+  >Skip for now &rarr;</a>
+{% endblock %}  
