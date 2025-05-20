@@ -7,7 +7,7 @@ __pycache__/
 .env
 venv/
 env/
-
+combined_all_output.txt
 # Django
 staticfiles/
 media/
