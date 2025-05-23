@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Data Deletion Instructions</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; line-height: 1.6; }
+    h1, h2 { color: #333; }
+    pre { background: #f4f4f4; padding: 1rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>User Data Deletion</h1>
+  <p>We comply with Facebook's requirements for data deletion callbacks.</p>
+  <h2>API Endpoint</h2>
+  <p><code>DELETE https://yourdomain.com/data-deletion/callback/</code></p>
+  <h2>Request Body</h2>
+  <pre>{
+  "user_id": "123456789",
+  "app_id": "YOUR_APP_ID"
+}</pre>
+  <h2>Response</h2>
+  <p>On success, return HTTP <strong>200 OK</strong> with an empty JSON object:</p>
+  <pre>{}</pre>
+  <h2>Manual Deletion</h2>
+  <p>If you prefer, you can email <a href="mailto:support@yourdomain.com">support@yourdomain.com</a> with your account details and request deletion.</p>
+</body>
+</html>
